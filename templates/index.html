@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4th Annual Core 10 CFB Pick'em</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+</head>
+<body data-view="{{ view }}" data-admin="{{ '1' if admin else '0' }}">
+  <div class="hash-overlay" aria-hidden="true"></div>
+  <header class="site-header">
+    <div class="brand">
+      <span class="kicker">4th Annual · 2026</span>
+      <span class="title">Core 10 CFB Pick'em</span>
+    </div>
+    <nav class="nav" aria-label="Primary">
+      <a href="/" data-nav="standings">Leaderboard</a>
+      <a href="/week" data-nav="week">This week</a>
+      <a href="/picks" data-nav="picks">Make picks</a>
+      <a href="/season" data-nav="season">Season</a>
+      <a href="/rules" data-nav="rules">How it works</a>
+      <a href="/admin" data-nav="admin">Admin</a>
+    </nav>
+    <a class="espn-btn" href="https://www.espn.com/college-football/scoreboard" target="_blank" rel="noopener">ESPN scores</a>
+  </header>
+
+  <div class="hero-band">
+    <section class="hero">
+      <div>
+        <h1 id="hero-title">The board is live.</h1>
+      </div>
+      <div class="hero-meta" id="hero-meta"></div>
+    </section>
+  </div>
+
+  <main>
+    <section id="view-standings" class="view panel">
+      <h2>Season standings</h2>
+      <p class="lede">Correct pick = points. Wrong pick = nothing. Expand a name to see that week’s card.</p>
+      <div class="table-wrap">
+        <table class="board" id="standings-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="standings-cards" class="standings-list"></div>
+    </section>
+
+    <section id="view-week" class="view panel">
+      <div class="toolbar">
+        <h2>Games of the week</h2>
+        <label class="week-select">
+          Week
+          <select id="week-select"></select>
+        </label>
+      </div>
+      <p class="lede" id="week-lede"></p>
+      <div id="matchups" class="matchup-grid"></div>
+    </section>
+
+    <section id="view-picks" class="view panel">
+      <h2>Make your picks</h2>
+      <form id="picks-form" class="picks-form">
+        <div class="field">
+          <label for="player-select">Your name</label>
+          <select id="player-select" required>
+            <option value="">Select…</option>
+          </select>
+        </div>
+        <p class="submitted-note" id="submitted-note"></p>
+        <div id="picks-matchups" class="matchup-grid"></div>
+        <p class="errors" id="picks-errors"></p>
+        <button class="primary-btn" type="submit">Save picks</button>
+      </form>
+    </section>
+
+    <section id="view-season" class="view panel">
+      <div class="toolbar">
+        <h2>Who everyone took</h2>
+        <label class="week-select">
+          Week
+          <select id="season-week-select"></select>
+        </label>
+      </div>
+      <div id="consensus" class="consensus"></div>
+      <h3 class="subhead">Preseason cards</h3>
+      <div id="preseason" class="preseason-grid"></div>
+    </section>
+
+    <section id="view-rules" class="view panel">
+      <h2>How scoring works</h2>
+      <div class="rules-grid">
+        <article class="rule-card">
+          <h3>Weekly picks</h3>
+          <p>Each game of the week is <strong>5 points</strong>. Any game that involves <strong>Auburn is 15 points</strong>.</p>
+        </article>
+        <article class="rule-card">
+          <h3>Preseason</h3>
+          <ul>
+            <li>Auburn regular-season record — <strong>50</strong></li>
+            <li>Each Power 4 champion — <strong>10</strong></li>
+            <li>Each College Football Playoff team — <strong>10</strong></li>
+            <li>National champion — <strong>50</strong></li>
+          </ul>
+        </article>
+        <article class="rule-card">
+          <h3>CFP Pick'em</h3>
+          <ul>
+            <li>First round — <strong>5</strong></li>
+            <li>Quarterfinals — <strong>10</strong></li>
+            <li>Semifinals — <strong>20</strong></li>
+            <li>Championship — <strong>40</strong></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-admin" class="view panel">
+      <h2>Game master</h2>
+      <p class="lede">PIN-gated. Search ESPN for a date window, tick 8–10 games, save the slate. Auburn games auto-score 15.</p>
+      <form id="admin-login" class="admin-login">
+        <label for="admin-pin">Admin PIN</label>
+        <input id="admin-pin" type="password" inputmode="numeric" autocomplete="off" />
+        <button class="primary-btn" type="submit">Unlock</button>
+        <p class="errors" id="admin-login-error"></p>
+      </form>
+      <div id="admin-desk" class="admin-desk hidden">
+        <div class="admin-row">
+          <button type="button" class="ghost-btn" id="sync-btn">Sync scores from ESPN</button>
+          <button type="button" class="ghost-btn" id="logout-btn">Lock admin</button>
+          <span id="sync-status" class="muted"></span>
+        </div>
+        <div class="admin-grid">
+          <label>Week
+            <select id="admin-week"></select>
+          </label>
+          <label>Status
+            <select id="admin-status">
+              <option value="upcoming">Upcoming</option>
+              <option value="open">Open for picks</option>
+              <option value="locked">Locked</option>
+              <option value="final">Final</option>
+            </select>
+          </label>
+          <button type="button" class="ghost-btn" id="status-btn">Update status</button>
+        </div>
+        <div class="admin-grid">
+          <label>From <input type="date" id="espn-start" /></label>
+          <label>To <input type="date" id="espn-end" /></label>
+          <button type="button" class="primary-btn" id="search-btn">Search ESPN</button>
+        </div>
+        <p class="muted" id="search-status"></p>
+        <div id="espn-results" class="espn-results"></div>
+        <button type="button" class="primary-btn" id="save-slate-btn">Save selected as this week’s games</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
