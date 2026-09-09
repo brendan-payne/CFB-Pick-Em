@@ -1,0 +1,9 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+data/pickem.db
+data/pickem.db-journal
+.DS_Store
+node_modules/
