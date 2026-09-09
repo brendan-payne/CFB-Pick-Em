@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS weeks (
   slug TEXT NOT NULL UNIQUE,
   label TEXT NOT NULL,
   sort_order INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'upcoming'
+  status TEXT NOT NULL DEFAULT 'upcoming',
+  lock_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS games (

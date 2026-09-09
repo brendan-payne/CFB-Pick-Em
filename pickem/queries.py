@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from pickem.db import get_conn, rows
-from pickem.scoring import game_locked, week_points_for_player
+from pickem.scoring import game_locked, week_lock_at, week_picks_locked, week_points_for_player
 
 
 def league_state(current_week_id: str | None = None) -> dict:
@@ -25,6 +25,12 @@ def league_state(current_week_id: str | None = None) -> dict:
     games_by_week: dict[str, list] = {}
     for g in games:
         games_by_week.setdefault(g["week_id"], []).append(g)
+
+    weeks_by_id = {w["id"]: w for w in weeks}
+    for week in weeks:
+        inferred = week_lock_at(week, games_by_week.get(week["id"], []))
+        week["lock_at"] = inferred.isoformat() if inferred else week.get("lock_at")
+        week["picksLocked"] = week_picks_locked(week, games_by_week.get(week["id"], []))
 
     if not current_week_id:
         current_week_id = _default_week(weeks)
@@ -58,7 +64,8 @@ def league_state(current_week_id: str | None = None) -> dict:
 
     games_out = []
     for g in games:
-        games_out.append({**g, "locked": game_locked(g)})
+        week = weeks_by_id.get(g["week_id"])
+        games_out.append({**g, "locked": game_locked(g, week=week)})
 
     return {
         "players": players,

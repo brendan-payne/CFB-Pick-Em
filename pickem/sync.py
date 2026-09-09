@@ -3,6 +3,7 @@ from __future__ import annotations
 from pickem import espn
 from pickem.db import get_conn
 from pickem.names import is_auburn_game, point_value_for, slug_game, teams_match
+from pickem.scoring import lock_at_for_saturday, saturday_from_games
 
 
 def apply_event_to_game(conn, game: dict, event: dict) -> None:
@@ -116,8 +117,40 @@ def sync_week_scores(week_id: str | None = None, start=None, end=None) -> dict:
     return {"matched": matched, "updated": matched, "events": len(events)}
 
 
+def _ensure_auburn_on_slate(events: list[dict]) -> list[dict]:
+    def auburnish(ev: dict) -> bool:
+        if ev.get("is_auburn"):
+            return True
+        away = ev["away"]["name"] if isinstance(ev.get("away"), dict) else ev.get("away_team") or ""
+        home = ev["home"]["name"] if isinstance(ev.get("home"), dict) else ev.get("home_team") or ""
+        return is_auburn_game(away, home)
+
+    if any(auburnish(ev) for ev in events):
+        return events
+    sat = saturday_from_games([{"kickoff": ev.get("kickoff")} for ev in events])
+    if not sat:
+        return events
+    found = next((ev for ev in search_espn_games(sat, sat) if ev.get("is_auburn")), None)
+    if not found:
+        return events
+    merged = [found] + list(events)
+    auburn = [ev for ev in merged if auburnish(ev)][:1]
+    rest = [ev for ev in merged if not auburnish(ev)][:9]
+    return auburn + rest
+
+
 def search_espn_games(start, end) -> list[dict]:
     events = espn.collect_events(start, end)
+    # Auburn may play Friday; still pin them on this week's Saturday slate.
+    from datetime import timedelta
+
+    auburn_days = espn.collect_events(start - timedelta(days=2), end)
+    events_by_id = {ev["espn_event_id"]: ev for ev in events}
+    for ev in auburn_days:
+        away, home = ev["away"]["name"], ev["home"]["name"]
+        if is_auburn_game(away, home):
+            events_by_id[ev["espn_event_id"]] = ev
+    events = list(events_by_id.values())
     out = []
     for ev in events:
         away, home = ev["away"]["name"], ev["home"]["name"]
@@ -128,7 +161,7 @@ def search_espn_games(start, end) -> list[dict]:
                 "point_value": point_value_for(away, home),
             }
         )
-    out.sort(key=lambda e: e.get("kickoff") or "")
+    out.sort(key=lambda e: (0 if e.get("is_auburn") else 1, e.get("kickoff") or ""))
     return out
 
 
@@ -176,5 +209,15 @@ def save_slate(week_id: str, event_payloads: list[dict], status: str = "open") -
                     i,
                 ),
             )
-        conn.execute("UPDATE weeks SET status = ? WHERE id = ?", (status, week_id))
+        sat = saturday_from_games(
+            [
+                {"kickoff": ev.get("kickoff")}
+                for ev in event_payloads
+            ]
+        )
+        lock_at = lock_at_for_saturday(sat).isoformat() if sat else None
+        conn.execute(
+            "UPDATE weeks SET status = ?, lock_at = COALESCE(?, lock_at) WHERE id = ?",
+            (status, lock_at, week_id),
+        )
     conn.close()

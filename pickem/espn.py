@@ -4,6 +4,7 @@ import json
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from pickem.names import normalize_team, teams_match
 
@@ -28,10 +29,62 @@ def fetch_scoreboard(day: date) -> dict:
     return _get(f"{SCOREBOARD}?{qs}")
 
 
-def _competitor_payload(comp: dict) -> dict:
+P4_CONFERENCE_IDS = {
+    "1": "ACC",
+    "4": "Big 12",
+    "5": "Big Ten",
+    "8": "SEC",
+}
+P4_NAME_HINTS = (
+    "sec",
+    "southeastern",
+    "acc",
+    "atlantic coast",
+    "big 12",
+    "big12",
+    "big twelve",
+    "big ten",
+    "big10",
+    "b1g",
+)
+
+
+def _conference_label(team: dict, competition: dict | None = None) -> str | None:
+    cid = str(team.get("conferenceId") or "").strip()
+    if cid in P4_CONFERENCE_IDS:
+        return P4_CONFERENCE_IDS[cid]
+    for group in team.get("groups") or []:
+        name = (group.get("shortName") or group.get("name") or "").strip()
+        gid = str(group.get("id") or "")
+        if gid in P4_CONFERENCE_IDS:
+            return P4_CONFERENCE_IDS[gid]
+        folded = name.lower()
+        for hint in P4_NAME_HINTS:
+            if hint in folded:
+                if "sec" in folded or "southeastern" in folded:
+                    return "SEC"
+                if "acc" in folded or "atlantic" in folded:
+                    return "ACC"
+                if "12" in folded or "twelve" in folded:
+                    return "Big 12"
+                if "ten" in folded or "10" in folded or "b1g" in folded:
+                    return "Big Ten"
+    groups = (competition or {}).get("groups")
+    if isinstance(groups, dict):
+        gid = str(groups.get("id") or "")
+        if gid in P4_CONFERENCE_IDS:
+            return P4_CONFERENCE_IDS[gid]
+    return None
+
+
+def _is_p4(*labels: str | None) -> bool:
+    return any(label in {"SEC", "ACC", "Big 12", "Big Ten"} for label in labels)
+
+
+def _competitor_payload(comp: dict, competition: dict | None = None) -> dict:
     team = comp.get("team") or {}
     rank = None
-    curated = team.get("curatedRank") or {}
+    curated = comp.get("curatedRank") or team.get("curatedRank") or {}
     if curated.get("current") not in (None, 99, 0, "99"):
         try:
             rank = int(curated["current"])
@@ -55,6 +108,7 @@ def _competitor_payload(comp: dict) -> dict:
         "winner": bool(comp.get("winner")),
         "score": score_i,
         "record": record,
+        "conference": _conference_label(team, competition),
     }
 
 
@@ -71,7 +125,7 @@ def parse_event(event: dict) -> dict | None:
     if not competitions:
         return None
     competition = competitions[0]
-    comps = [_competitor_payload(c) for c in competition.get("competitors") or []]
+    comps = [_competitor_payload(c, competition) for c in competition.get("competitors") or []]
     home = next((c for c in comps if c["home_away"] == "home"), None)
     away = next((c for c in comps if c["home_away"] == "away"), None)
     if not home or not away:
@@ -111,6 +165,9 @@ def parse_event(event: dict) -> dict | None:
         "kickoff": kickoff,
         "spread": _odds(competition),
         "neutral": bool(competition.get("neutralSite")),
+        "is_p4": _is_p4(away.get("conference"), home.get("conference")),
+        "conferences": [c for c in (away.get("conference"), home.get("conference")) if c],
+        "is_top25": bool((away.get("rank") and away["rank"] <= 25) or (home.get("rank") and home["rank"] <= 25)),
     }
 
 
@@ -148,5 +205,7 @@ def match_event(events: list[dict], away: str, home: str) -> dict | None:
 
 
 def default_window() -> tuple[date, date]:
-    today = datetime.now(timezone.utc).date()
-    return today - timedelta(days=1), today + timedelta(days=6)
+    from pickem.scoring import saturday_on_or_after
+
+    sat = saturday_on_or_after(datetime.now(ZoneInfo("America/Chicago")).date())
+    return sat, sat

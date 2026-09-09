@@ -126,8 +126,13 @@ def parse_matchup(label: str) -> tuple[str, str]:
     return raw, raw
 
 
+def is_auburn_team(raw: str) -> bool:
+    n = normalize_team(raw)
+    return n == "auburn" or n.startswith("auburn ")
+
+
 def is_auburn_game(away: str, home: str) -> bool:
-    return normalize_team(away) == "auburn" or normalize_team(home) == "auburn"
+    return is_auburn_team(away) or is_auburn_team(home)
 
 
 def point_value_for(away: str, home: str) -> int:

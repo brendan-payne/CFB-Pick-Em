@@ -11,7 +11,7 @@ from pickem.db import get_conn, init_db
 from pickem.import_xlsx import import_xlsx, needs_reimport
 from pickem.queries import league_state
 from pickem.scoring import game_locked
-from pickem.sync import save_slate, search_espn_games, sync_week_scores
+from pickem.sync import save_slate, search_espn_games, sync_week_scores, _ensure_auburn_on_slate
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -90,7 +90,9 @@ def create_app() -> Flask:
                 if not game:
                     continue
                 game = dict(game)
-                if game_locked(game, now):
+                week = conn.execute("SELECT * FROM weeks WHERE id = ?", (game["week_id"],)).fetchone()
+                week = dict(week) if week else None
+                if game_locked(game, now, week=week):
                     skipped.append(game["label"])
                     continue
                 conn.execute(
@@ -145,17 +147,13 @@ def create_app() -> Flask:
         denied = _require_admin()
         if denied:
             return denied
-        start_s = request.args.get("start")
-        end_s = request.args.get("end")
+        saturday_s = request.args.get("saturday") or request.args.get("start")
         try:
-            start = date.fromisoformat(start_s) if start_s else date.today()
-            end = date.fromisoformat(end_s) if end_s else date.today()
+            sat = date.fromisoformat(saturday_s) if saturday_s else date.today()
         except ValueError:
-            return jsonify({"error": "Dates must be YYYY-MM-DD."}), 400
-        if (end - start).days > 10:
-            return jsonify({"error": "Search a window of 10 days or less."}), 400
-        games = search_espn_games(start, end)
-        return jsonify({"games": games})
+            return jsonify({"error": "Saturday must be YYYY-MM-DD."}), 400
+        games = search_espn_games(sat, sat)
+        return jsonify({"games": games, "saturday": sat.isoformat()})
 
     @app.post("/api/admin/slate")
     def admin_slate():
@@ -168,6 +166,7 @@ def create_app() -> Flask:
         status = data.get("status") or "open"
         if not week_id or not events:
             return jsonify({"error": "Pick a week and at least one game."}), 400
+        events = _ensure_auburn_on_slate(events)
         save_slate(week_id, events, status)
         return jsonify({"ok": True, "state": league_state()})
 

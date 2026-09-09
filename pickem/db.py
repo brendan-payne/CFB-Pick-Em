@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS weeks (
   slug TEXT NOT NULL UNIQUE,
   label TEXT NOT NULL,
   sort_order INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'upcoming'
+  status TEXT NOT NULL DEFAULT 'upcoming',
+  lock_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS games (
@@ -90,6 +91,9 @@ def get_conn() -> sqlite3.Connection:
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(weeks)")}
+        if "lock_at" not in cols:
+            conn.execute("ALTER TABLE weeks ADD COLUMN lock_at TEXT")
 
 
 def rows(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> list[dict]:

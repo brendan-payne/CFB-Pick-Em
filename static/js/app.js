@@ -173,10 +173,8 @@
       (state.players || []).map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
     sel.value = current;
     const weekId = state.currentWeekId;
-    const games = gamesFor(weekId).filter((g) => {
-      const w = state.weeks.find((x) => x.id === g.week_id);
-      return w && (w.status === "open" || w.status === "locked" || w.status === "final");
-    });
+    const week = (state.weeks || []).find((w) => w.id === weekId);
+    const locked = !!(week && week.picksLocked);
     const openGames = gamesFor(weekId);
     $("picks-matchups").innerHTML = openGames.map((g) => matchupCard(g, { selectable: true, playerId: sel.value })).join("");
     $("picks-matchups").querySelectorAll("button[data-game]").forEach((btn) => {
@@ -193,7 +191,10 @@
       ).length;
       return `${p.name} ${n}/${openGames.length}`;
     });
-    $("submitted-note").textContent = openGames.length ? `Cards in: ${submitted.join(" · ")}` : "";
+    const lockNote = locked ? "Picks are locked (11:00 a.m. Central Saturday). " : "";
+    $("submitted-note").textContent = openGames.length ? `${lockNote}Cards in: ${submitted.join(" · ")}` : lockNote;
+    const saveBtn = document.querySelector("#picks-form .primary-btn");
+    if (saveBtn) saveBtn.disabled = locked;
   }
 
   function renderSeason() {
@@ -343,40 +344,74 @@
     }
   });
 
+  let lastSearchGames = [];
+
+  function nextSaturdayISO() {
+    const now = new Date();
+    const day = now.getDay(); // 0 Sun … 6 Sat
+    const add = (6 - day + 7) % 7;
+    const sat = new Date(now.getFullYear(), now.getMonth(), now.getDate() + add);
+    const m = String(sat.getMonth() + 1).padStart(2, "0");
+    const d = String(sat.getDate()).padStart(2, "0");
+    return `${sat.getFullYear()}-${m}-${d}`;
+  }
+
+  function passesFilters(g) {
+    if (g.is_auburn) return true;
+    const top = $("filter-top25")?.checked;
+    const p4 = $("filter-p4")?.checked;
+    if (top && !g.is_top25) return false;
+    if (p4 && !g.is_p4) return false;
+    return true;
+  }
+
+  function renderEspnResults() {
+    const games = lastSearchGames.filter(passesFilters);
+    const hidden = lastSearchGames.length - games.length;
+    $("search-status").textContent = `${games.length} FBS games` + (hidden ? ` (${hidden} hidden by filters)` : "") + ". Auburn is pinned when they play.";
+    $("espn-results").innerHTML = games
+      .map((g) => {
+        const id = g.espn_event_id;
+        const label = `${g.away.name} @ ${g.home.name}`;
+        const conf = (g.conferences || []).join(" / ");
+        const extra = [g.spread, g.short_detail, conf, g.is_top25 ? "Top 25" : "", g.is_auburn ? "AUBURN 15" : "5 pts"]
+          .filter(Boolean)
+          .join(" · ");
+        const checked = selectedEspn.has(id) ? "checked" : "";
+        return `<label class="espn-item ${g.is_auburn ? "auburn-row" : ""}">
+          <input type="checkbox" data-eid="${id}" ${checked} />
+          <span><strong>${label}</strong><br /><span class="muted">${extra}</span></span>
+          <a href="${g.espn_url}" target="_blank" rel="noopener">box</a>
+        </label>`;
+      })
+      .join("");
+    $("espn-results").querySelectorAll("input[type=checkbox]").forEach((box) => {
+      box.addEventListener("change", () => {
+        const g = lastSearchGames.find((x) => x.espn_event_id === box.dataset.eid);
+        if (box.checked) selectedEspn.set(box.dataset.eid, g);
+        else selectedEspn.delete(box.dataset.eid);
+      });
+    });
+  }
+
   $("search-btn")?.addEventListener("click", async () => {
-    $("search-status").textContent = "Searching ESPN…";
-    const start = $("espn-start").value;
-    const end = $("espn-end").value;
-    const res = await fetch(`/api/admin/espn-search?start=${start}&end=${end}`);
+    $("search-status").textContent = "Searching Saturday’s FBS slate…";
+    const saturday = $("espn-saturday").value;
+    const res = await fetch(`/api/admin/espn-search?saturday=${saturday}`);
     const data = await res.json();
     if (!res.ok) {
       $("search-status").textContent = data.error || "Search failed.";
       return;
     }
     selectedEspn.clear();
-    $("search-status").textContent = `${(data.games || []).length} games found.`;
-    $("espn-results").innerHTML = (data.games || [])
-      .map((g) => {
-        const id = g.espn_event_id;
-        const label = `${g.away.name} @ ${g.home.name}`;
-        const extra = [g.spread, g.short_detail, g.is_auburn ? "AUBURN 15" : "5 pts"]
-          .filter(Boolean)
-          .join(" · ");
-        return `<label class="espn-item">
-          <input type="checkbox" data-eid="${id}" />
-          <span><strong>${label}</strong><br /><span class="muted">${extra}</span></span>
-          <a href="${g.espn_url}" target="_blank" rel="noopener">ESPN</a>
-        </label>`;
-      })
-      .join("");
-    $("espn-results").querySelectorAll("input[type=checkbox]").forEach((box) => {
-      box.addEventListener("change", () => {
-        const g = data.games.find((x) => x.espn_event_id === box.dataset.eid);
-        if (box.checked) selectedEspn.set(box.dataset.eid, g);
-        else selectedEspn.delete(box.dataset.eid);
-      });
-    });
+    lastSearchGames = data.games || [];
+    lastSearchGames.filter((g) => g.is_auburn).forEach((g) => selectedEspn.set(g.espn_event_id, g));
+    $("admin-filters")?.classList.remove("hidden");
+    renderEspnResults();
   });
+
+  $("filter-top25")?.addEventListener("change", renderEspnResults);
+  $("filter-p4")?.addEventListener("change", renderEspnResults);
 
   $("save-slate-btn")?.addEventListener("click", async () => {
     const games = [...selectedEspn.values()];
@@ -398,15 +433,8 @@
     }
   });
 
-  const today = new Date();
-  const iso = (d) => d.toISOString().slice(0, 10);
-  if ($("espn-start")) {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 1);
-    const end = new Date(today);
-    end.setDate(end.getDate() + 6);
-    $("espn-start").value = iso(start);
-    $("espn-end").value = iso(end);
+  if ($("espn-saturday")) {
+    $("espn-saturday").value = nextSaturdayISO();
   }
 
   loadState();

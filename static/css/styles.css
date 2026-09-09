@@ -281,7 +281,18 @@ select, input[type="date"], input[type="password"] {
   align-items: end;
   margin-bottom: 14px;
 }
-.espn-results { display: grid; gap: 8px; margin: 12px 0; max-height: 420px; overflow: auto; }
+.admin-filters { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 4px; }
+.filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--cream);
+  font-size: 13px;
+}
+.espn-item.auburn-row { border-color: #c45b4a; }
 .espn-item {
   display: grid;
   grid-template-columns: 24px 1fr auto;

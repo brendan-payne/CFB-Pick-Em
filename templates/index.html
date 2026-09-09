@@ -95,7 +95,7 @@
       <div class="rules-grid">
         <article class="rule-card">
           <h3>Weekly picks</h3>
-          <p>Each game of the week is <strong>5 points</strong>. Any game that involves <strong>Auburn is 15 points</strong>.</p>
+          <p>Each game of the week is <strong>5 points</strong>. Any game that involves <strong>Auburn is 15 points</strong>. Cards lock at <strong>11:00 a.m. Central</strong> on that Saturday.</p>
         </article>
         <article class="rule-card">
           <h3>Preseason</h3>
@@ -120,7 +120,7 @@
 
     <section id="view-admin" class="view panel">
       <h2>Game master</h2>
-      <p class="lede">PIN-gated. Search ESPN for a date window, tick 8–10 games, save the slate. Auburn games auto-score 15.</p>
+      <p class="lede">PIN-gated. Search Saturday’s FBS slate, tick 10 games (Auburn is auto-included when they play), save. Auburn games auto-score 15. Picks lock at 11:00 a.m. Central that Saturday.</p>
       <form id="admin-login" class="admin-login">
         <label for="admin-pin">Admin PIN</label>
         <input id="admin-pin" type="password" inputmode="numeric" autocomplete="off" />
@@ -148,9 +148,14 @@
           <button type="button" class="ghost-btn" id="status-btn">Update status</button>
         </div>
         <div class="admin-grid">
-          <label>From <input type="date" id="espn-start" /></label>
-          <label>To <input type="date" id="espn-end" /></label>
-          <button type="button" class="primary-btn" id="search-btn">Search ESPN</button>
+          <label>Saturday
+            <input type="date" id="espn-saturday" />
+          </label>
+          <button type="button" class="primary-btn" id="search-btn">Search Saturday slate</button>
+        </div>
+        <div class="admin-filters hidden" id="admin-filters">
+          <label class="filter-chip"><input type="checkbox" id="filter-top25" /> Top 25</label>
+          <label class="filter-chip"><input type="checkbox" id="filter-p4" /> P4 (SEC · ACC · Big 12 · Big Ten)</label>
         </div>
         <p class="muted" id="search-status"></p>
         <div id="espn-results" class="espn-results"></div>
